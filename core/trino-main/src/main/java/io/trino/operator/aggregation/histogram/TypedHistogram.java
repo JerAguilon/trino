@@ -23,6 +23,8 @@ public interface TypedHistogram
 
     void serialize(BlockBuilder out);
 
+    void serializeMedian(BlockBuilder out);
+
     void addAll(TypedHistogram other);
 
     void readAllValues(HistogramValueReader reader);
