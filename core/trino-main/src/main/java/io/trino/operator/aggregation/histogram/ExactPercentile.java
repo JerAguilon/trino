@@ -25,6 +25,7 @@ import io.trino.spi.function.InputFunction;
 import io.trino.spi.function.OutputFunction;
 import io.trino.spi.function.SqlType;
 import io.trino.spi.function.TypeParameter;
+import io.trino.spi.type.StandardTypes;
 import io.trino.spi.type.Type;
 
 import static java.util.Objects.requireNonNull;
@@ -41,12 +42,14 @@ public final class ExactPercentile
             @TypeParameter("T") Type type,
             @AggregationState("T") HistogramState state,
             @BlockPosition @SqlType("T") Block key,
+            @SqlType(StandardTypes.DOUBLE) double percentile,
             @BlockIndex int position)
     {
         TypedHistogram typedHistogram = state.get();
         long startSize = typedHistogram.getEstimatedSize();
         typedHistogram.add(position, key, 1L);
         state.addMemoryUsage(typedHistogram.getEstimatedSize() - startSize);
+        state.setPercentile(percentile);
     }
 
     @CombineFunction
@@ -62,12 +65,13 @@ public final class ExactPercentile
         long startSize = typedHistogram.getEstimatedSize();
         typedHistogram.addAll(otherState.get());
         state.addMemoryUsage(typedHistogram.getEstimatedSize() - startSize);
+        state.setPercentile(otherState.getPercentile());
     }
 
     @OutputFunction("T")
     public static void output(@TypeParameter("T") Type type, @AggregationState("T") HistogramState state, BlockBuilder out)
     {
         TypedHistogram typedHistogram = state.get();
-        typedHistogram.serializeMedian(out);
+        typedHistogram.serializeMedian(out, state.getPercentile());
     }
 }

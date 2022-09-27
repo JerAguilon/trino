@@ -122,8 +122,44 @@ public class SingleTypedHistogram
         }
     }
 
+    private Comparable getObject(Block valuesBlock, int i) {
+        Class<?> javaType = type.getJavaType();
+        if (javaType.equals(boolean.class)) {
+            return type.getBoolean(valuesBlock, i);
+        }
+        else if (javaType.equals(long.class)) {
+            return type.getLong(valuesBlock, i);
+        }
+        else if (javaType.equals(double.class)) {
+            return type.getDouble(valuesBlock, i);
+        }
+        else if (javaType.equals(Slice.class)) {
+            return type.getSlice(valuesBlock, i);
+        }
+        return ((Comparable)type.getObjectValue(null, valuesBlock, i));
+    }
+
+
+    private void writeObject(BlockBuilder out, Comparable obj) {
+        Class<?> javaType = type.getJavaType();
+        if (javaType.equals(boolean.class)) {
+            type.writeBoolean(out, (Boolean)obj);
+        }
+        else if (javaType.equals(long.class)) {
+            type.writeLong(out, (Long) obj);
+        }
+        else if (javaType.equals(double.class)) {
+            type.writeDouble(out, (Double) obj);
+        }
+        else if (javaType.equals(Slice.class)) {
+            type.writeSlice(out, (Slice) obj);
+        } else {
+            type.writeObject(out, obj);
+        }
+    }
+
     @Override
-    public void serializeMedian(BlockBuilder out)
+    public void serializeMedian(BlockBuilder out, double percentile)
     {
         if (values.getPositionCount() == 0) {
             out.appendNull();
@@ -131,35 +167,16 @@ public class SingleTypedHistogram
         else {
             Block valuesBlock = values.build();
             CounterTuple[] counters = new CounterTuple[valuesBlock.getPositionCount()];
+            Class<?> javaType = type.getJavaType();
             for (int i = 0; i < valuesBlock.getPositionCount(); i++) {
-                Comparable obj = ((Comparable)type.getObjectValue(null, valuesBlock, i));
+                Comparable obj = getObject(valuesBlock, i);
                 long count = counts.get(i);
                 counters[i] = new CounterTuple(obj, count);
             }
 
             makeCountersCumulative(counters);
-            Object value = bisect(counters, counters.length / 2 + 1); // TODO: support non-medians
-            Class<?> javaType = type.getJavaType();
-            VarcharType.VARCHAR.writeString(out, (String) value);
-//            if (value == null) {
-//                out.appendNull();
-//            }
-//            else if (javaType.equals(boolean.class)) {
-//                type.writeBoolean(out, (Boolean) value);
-//            }
-//            else if (javaType.equals(long.class)) {
-//                type.writeLong(out, (Long) value);
-//            }
-//            else if (javaType.equals(double.class)) {
-//                type.writeDouble(out, (Double) value);
-//            }
-//            else if (javaType.equals(Slice.class)) {
-//                type.writeSlice(out, (Slice) value);
-//            } else if (javaType.equals(String.class)) {
-//                VarcharType.VARCHAR.writeString(out, (String) value);
-//            } else {
-//                type.writeObject(out, value);
-//            }
+            Comparable value = bisect(counters, (int)(counters.length * percentile + 1)); // TODO: support non-medians
+            writeObject(out, value);
         }
     }
 

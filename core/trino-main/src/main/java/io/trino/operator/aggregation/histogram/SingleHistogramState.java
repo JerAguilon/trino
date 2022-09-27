@@ -32,11 +32,15 @@ public class SingleHistogramState
     private final BlockPositionHashCode hashCodeOperator;
     private SingleTypedHistogram typedHistogram;
 
+    public double percentile;
+
+
     public SingleHistogramState(Type keyType, BlockPositionEqual equalOperator, BlockPositionHashCode hashCodeOperator, int expectedEntriesCount)
     {
         this.keyType = requireNonNull(keyType, "keyType is null");
         this.equalOperator = requireNonNull(equalOperator, "equalOperator is null");
         this.hashCodeOperator = requireNonNull(hashCodeOperator, "hashCodeOperator is null");
+        this.percentile = .5;
         typedHistogram = new SingleTypedHistogram(keyType, equalOperator, hashCodeOperator, expectedEntriesCount);
     }
 
@@ -55,6 +59,16 @@ public class SingleHistogramState
     @Override
     public void addMemoryUsage(long memory)
     {
+    }
+
+    @Override
+    public void setPercentile(double percentile) {
+        this.percentile = percentile;
+    }
+
+    @Override
+    public double getPercentile() {
+        return this.percentile;
     }
 
     @Override

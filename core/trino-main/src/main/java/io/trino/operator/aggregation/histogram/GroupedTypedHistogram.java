@@ -13,6 +13,7 @@
  */
 package io.trino.operator.aggregation.histogram;
 
+import io.airlift.slice.Slice;
 import io.trino.array.IntBigArray;
 import io.trino.array.LongBigArray;
 import io.trino.spi.TrinoException;
@@ -23,6 +24,10 @@ import io.trino.type.BlockTypeOperators.BlockPositionEqual;
 import io.trino.type.BlockTypeOperators.BlockPositionHashCode;
 import jdk.jshell.spi.ExecutionControl;
 import org.openjdk.jol.info.ClassLayout;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -165,6 +170,25 @@ public class GroupedTypedHistogram
                 + headPointers.sizeOf();
     }
 
+    /**
+     * used to iterate over all non-null nodes in the data structure
+     *
+     * @param nodeReader - will be passed every non-null nodePointer
+     */
+    private void iterateGroupNodes(long groupdId, NodeReader nodeReader)
+    {
+        // while the index can be a long, the value is always an int
+        int currentPointer = (int) headPointers.get(groupdId);
+        checkArgument(currentPointer != NULL, "valid group must have non-null head pointer");
+
+        while (currentPointer != NULL) {
+            checkState(currentPointer < nextNodePointer, "error, corrupt pointer; max valid %s, found %s", nextNodePointer, currentPointer);
+            nodeReader.read(currentPointer);
+            currentPointer = nextPointers.get(currentPointer);
+        }
+    }
+
+
     @Override
     public void serialize(BlockBuilder out)
     {
@@ -184,9 +208,96 @@ public class GroupedTypedHistogram
         }
     }
 
+    private Comparable getObject(Block valuesBlock, int i) {
+        Class<?> javaType = type.getJavaType();
+        if (javaType.equals(boolean.class)) {
+            return type.getBoolean(valuesBlock, i);
+        }
+        else if (javaType.equals(long.class)) {
+            return type.getLong(valuesBlock, i);
+        }
+        else if (javaType.equals(double.class)) {
+            return type.getDouble(valuesBlock, i);
+        }
+        else if (javaType.equals(Slice.class)) {
+            return type.getSlice(valuesBlock, i);
+        }
+        return ((Comparable)type.getObjectValue(null, valuesBlock, i));
+    }
+
+
+    private void writeObject(BlockBuilder out, Comparable obj) {
+        Class<?> javaType = type.getJavaType();
+        if (javaType.equals(boolean.class)) {
+            type.writeBoolean(out, (Boolean)obj);
+        } else if (javaType.equals(long.class)) {
+            type.writeLong(out, (Long) obj);
+        } else if (javaType.equals(double.class)) {
+            type.writeDouble(out, (Double) obj);
+        } else if (javaType.equals(Slice.class)) {
+            type.writeSlice(out, (Slice) obj);
+        } else {
+            type.writeObject(out, obj);
+        }
+    }
+
+
     @Override
-    public void serializeMedian(BlockBuilder out) {
-        throw new UnsupportedOperationException("Not implemented yet");
+    public void serializeMedian(BlockBuilder out, double percentile) {
+        if (isCurrentGroupEmpty()) {
+            out.appendNull();
+        }
+        else {
+            List<CounterTuple> counters = new ArrayList<>();
+            iterateGroupNodes(currentGroupId, nodePointer -> {
+                checkArgument(nodePointer != NULL, "should never see null here as we exclude in iterateGroupNodesCall");
+                ValueNode valueNode = bucketNodeFactory.createValueNode(nodePointer);
+                Comparable obj = getObject(values, valueNode.getValuePosition());
+                long count = valueNode.getCount();
+                counters.add(new CounterTuple(obj, count));
+//                valueNode.writeNodeAsBlock(values, blockBuilder);
+//                type.appendTo(valuesBlock, getValuePosition(), outputBlockBuilder);
+//                BIGINT.writeLong(outputBlockBuilder, getCount());
+            });
+            CounterTuple[] counterArr = counters.toArray(new CounterTuple[0]);
+            makeCountersCumulative(counterArr);
+            Comparable value = bisect(counterArr, (int)(counterArr.length * percentile + 1)); // TODO: support non-medians
+            writeObject(out, value);
+        }
+    }
+
+    private long makeCountersCumulative(CounterTuple[] counters) {
+        Arrays.sort(counters);
+        long runningSum = 0;
+        for (int i = 0; i < counters.length; i++) {
+            CounterTuple curr = counters[i];
+            runningSum += curr.count;
+            curr.count = runningSum;
+        }
+        return runningSum;
+    }
+    private Comparable bisect(CounterTuple[] cumulativeCounters, long target) {
+        CounterTuple dummyCounter = new CounterTuple(null, target);
+        int index = Arrays.binarySearch(
+                cumulativeCounters,
+                dummyCounter,
+                (o1, o2) -> {
+                    long diff = o1.count - o2.count;
+                    // Return -1/0/1 to avoid unsafe long conversions to int
+                    if (diff > 0) {
+                        return 1;
+                    } else if (diff < 0) {
+                        return -1;
+                    }
+                    return 0;
+                }
+        );
+        if (index < 0) {
+            index = 0;
+        } else if (index > cumulativeCounters.length - 1) {
+            index = cumulativeCounters.length - 1;
+        }
+        return cumulativeCounters[index].key;
     }
 
     @Override
@@ -269,24 +380,6 @@ public class GroupedTypedHistogram
     private boolean isCurrentGroupEmpty()
     {
         return headPointers.get(currentGroupId) == NULL;
-    }
-
-    /**
-     * used to iterate over all non-null nodes in the data structure
-     *
-     * @param nodeReader - will be passed every non-null nodePointer
-     */
-    private void iterateGroupNodes(long groupdId, NodeReader nodeReader)
-    {
-        // while the index can be a long, the value is always an int
-        int currentPointer = (int) headPointers.get(groupdId);
-        checkArgument(currentPointer != NULL, "valid group must have non-null head pointer");
-
-        while (currentPointer != NULL) {
-            checkState(currentPointer < nextNodePointer, "error, corrupt pointer; max valid %s, found %s", nextNodePointer, currentPointer);
-            nodeReader.read(currentPointer);
-            currentPointer = nextPointers.get(currentPointer);
-        }
     }
 
     private void rehash()

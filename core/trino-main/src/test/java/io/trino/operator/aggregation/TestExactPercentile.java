@@ -23,7 +23,9 @@ import io.trino.operator.aggregation.groupby.AggregationTestInputBuilder;
 import io.trino.operator.aggregation.groupby.AggregationTestOutput;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
+import io.trino.spi.block.RunLengthEncodedBlock;
 import io.trino.spi.type.*;
+import io.trino.sql.analyzer.TypeSignatureProvider;
 import io.trino.sql.tree.QualifiedName;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -56,81 +58,44 @@ public class TestExactPercentile
     private static final DateTimeZone DATE_TIME_ZONE = getDateTimeZone(TIME_ZONE_KEY);
     private static final TestingFunctionResolution FUNCTION_RESOLUTION = new TestingFunctionResolution();
 
+    private static final List<TypeSignatureProvider> APPROX_PERCENTILE_ARG_TYPES = fromTypes(DOUBLE, DOUBLE);
+
+    private static Block createRleBlock(double percentile, int positionCount)
+    {
+        BlockBuilder blockBuilder = DOUBLE.createBlockBuilder(null, 1);
+        DOUBLE.writeDouble(blockBuilder, percentile);
+        return RunLengthEncodedBlock.create(blockBuilder.build(), positionCount);
+    }
+
     @Test
     public void testSimpleHistograms()
     {
         assertAggregation(
                 FUNCTION_RESOLUTION,
                 QualifiedName.of("exact_percentile"),
-                fromTypes(VARCHAR),
-                "b",
-                createStringsBlock("a", "b", "c"));
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("exact_percentile"),
-//                fromTypes(VARCHAR),
-//                "c",
-//                createStringsBlock("a", "b", "c", "d"));
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(VARCHAR),
-//                ImmutableMap.of("a", 1L, "b", 1L, "c", 1L),
-//                createStringsBlock("a", "b", "c"));
-//
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(BIGINT),
-//                ImmutableMap.of(100L, 1L, 200L, 1L, 300L, 1L),
-//                createLongsBlock(100L, 200L, 300L));
-//
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(DOUBLE),
-//                ImmutableMap.of(0.1, 1L, 0.3, 1L, 0.2, 1L),
-//                createDoublesBlock(0.1, 0.3, 0.2));
-//
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(BOOLEAN),
-//                ImmutableMap.of(true, 1L, false, 1L),
-//                createBooleansBlock(true, false));
+                APPROX_PERCENTILE_ARG_TYPES,
+                2.0,
+                createDoublesBlock(1.0, 2.0, 3.0),
+                createRleBlock(0.5, 3)
+        );
+        assertAggregation(
+                FUNCTION_RESOLUTION,
+                QualifiedName.of("exact_percentile"),
+                APPROX_PERCENTILE_ARG_TYPES,
+                3.0,
+                createDoublesBlock(null, 2.0, 3.0),
+                createRleBlock(0.5, 3)
+        );
+        assertAggregation(
+                FUNCTION_RESOLUTION,
+                QualifiedName.of("exact_percentile"),
+                APPROX_PERCENTILE_ARG_TYPES,
+                2.0,
+                createDoublesBlock(null, 2.0, null),
+                createRleBlock(0.5, 3)
+        );
     }
 
-//    @Test
-//    public void testSharedGroupBy()
-//    {
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(VARCHAR),
-//                ImmutableMap.of("a", 1L, "b", 1L, "c", 1L),
-//                createStringsBlock("a", "b", "c"));
-//
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(BIGINT),
-//                ImmutableMap.of(100L, 1L, 200L, 1L, 300L, 1L),
-//                createLongsBlock(100L, 200L, 300L));
-//
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"), fromTypes(DOUBLE),
-//                ImmutableMap.of(0.1, 1L, 0.3, 1L, 0.2, 1L),
-//                createDoublesBlock(0.1, 0.3, 0.2));
-//
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(BOOLEAN),
-//                ImmutableMap.of(true, 1L, false, 1L),
-//                createBooleansBlock(true, false));
-//    }
-//
 //    @Test
 //    public void testDuplicateKeysValues()
 //    {
@@ -218,16 +183,6 @@ public class TestExactPercentile
 //                builder.build());
 //    }
 //
-//    @Test
-//    public void testLargerHistograms()
-//    {
-//        assertAggregation(
-//                FUNCTION_RESOLUTION,
-//                QualifiedName.of("histogram"),
-//                fromTypes(VARCHAR),
-//                ImmutableMap.of("a", 25L, "b", 10L, "c", 12L, "d", 1L, "e", 2L),
-//                createStringsBlock("a", "b", "c", "d", "e", "e", "c", "a", "a", "a", "b", "a", "a", "a", "a", "b", "a", "a", "a", "a", "b", "a", "a", "a", "a", "b", "a", "a", "a", "a", "b", "a", "c", "c", "b", "a", "c", "c", "b", "a", "c", "c", "b", "a", "c", "c", "b", "a", "c", "c"));
-//    }
 //
 //    @Test
 //    public void testEmptyHistogramOutputsNull()

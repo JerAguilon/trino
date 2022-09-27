@@ -37,12 +37,15 @@ public class GroupedHistogramState
     private TypedHistogram typedHistogram;
     private long size;
 
+    public double percentile = 0.5;
+
     public GroupedHistogramState(Type type, BlockPositionEqual equalOperator, BlockPositionHashCode hashCodeOperator, int expectedEntriesCount)
     {
         this.type = requireNonNull(type, "type is null");
         this.equalOperator = requireNonNull(equalOperator, "equalOperator is null");
         this.hashCodeOperator = requireNonNull(hashCodeOperator, "hashCodeOperator is null");
         typedHistogram = new GroupedTypedHistogram(type, equalOperator, hashCodeOperator, expectedEntriesCount);
+        this.percentile = 0.5;
     }
 
     @Override
@@ -67,6 +70,16 @@ public class GroupedHistogramState
     public void addMemoryUsage(long memory)
     {
         size += memory;
+    }
+
+    @Override
+    public void setPercentile(double percentile) {
+        this.percentile = percentile;
+    }
+
+    @Override
+    public double getPercentile() {
+        return this.percentile;
     }
 
     @Override

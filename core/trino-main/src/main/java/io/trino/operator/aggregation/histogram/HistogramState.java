@@ -34,5 +34,9 @@ public interface HistogramState
 
     void addMemoryUsage(long memory);
 
+    void setPercentile(double percentile);
+
+    double getPercentile();
+
     void deserialize(Block block, int expectedSize);
 }

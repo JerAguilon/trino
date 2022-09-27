@@ -23,7 +23,7 @@ public interface TypedHistogram
 
     void serialize(BlockBuilder out);
 
-    void serializeMedian(BlockBuilder out);
+    void serializeMedian(BlockBuilder out, double percentile);
 
     void addAll(TypedHistogram other);
 
