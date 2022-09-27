@@ -13,15 +13,22 @@
  */
 package io.trino.operator.aggregation.histogram;
 
+import io.airlift.slice.Slice;
 import io.trino.array.IntBigArray;
 import io.trino.array.LongBigArray;
 import io.trino.spi.TrinoException;
 import io.trino.spi.block.Block;
 import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.type.Type;
+import io.trino.spi.type.VarcharType;
 import io.trino.type.BlockTypeOperators.BlockPositionEqual;
 import io.trino.type.BlockTypeOperators.BlockPositionHashCode;
 import org.openjdk.jol.info.ClassLayout;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static io.trino.spi.StandardErrorCode.GENERIC_INSUFFICIENT_RESOURCES;
@@ -113,6 +120,81 @@ public class SingleTypedHistogram
             }
             out.closeEntry();
         }
+    }
+
+    @Override
+    public void serializeMedian(BlockBuilder out)
+    {
+        if (values.getPositionCount() == 0) {
+            out.appendNull();
+        }
+        else {
+            Block valuesBlock = values.build();
+            CounterTuple[] counters = new CounterTuple[valuesBlock.getPositionCount()];
+            for (int i = 0; i < valuesBlock.getPositionCount(); i++) {
+                Comparable obj = ((Comparable)type.getObjectValue(null, valuesBlock, i));
+                long count = counts.get(i);
+                counters[i] = new CounterTuple(obj, count);
+            }
+
+            makeCountersCumulative(counters);
+            Object value = bisect(counters, counters.length / 2 + 1); // TODO: support non-medians
+            Class<?> javaType = type.getJavaType();
+            VarcharType.VARCHAR.writeString(out, (String) value);
+//            if (value == null) {
+//                out.appendNull();
+//            }
+//            else if (javaType.equals(boolean.class)) {
+//                type.writeBoolean(out, (Boolean) value);
+//            }
+//            else if (javaType.equals(long.class)) {
+//                type.writeLong(out, (Long) value);
+//            }
+//            else if (javaType.equals(double.class)) {
+//                type.writeDouble(out, (Double) value);
+//            }
+//            else if (javaType.equals(Slice.class)) {
+//                type.writeSlice(out, (Slice) value);
+//            } else if (javaType.equals(String.class)) {
+//                VarcharType.VARCHAR.writeString(out, (String) value);
+//            } else {
+//                type.writeObject(out, value);
+//            }
+        }
+    }
+
+    private long makeCountersCumulative(CounterTuple[] counters) {
+        Arrays.sort(counters);
+        long runningSum = 0;
+        for (int i = 0; i < counters.length; i++) {
+            CounterTuple curr = counters[i];
+            runningSum += curr.count;
+            curr.count = runningSum;
+        }
+        return runningSum;
+    }
+    private Comparable bisect(CounterTuple[] cumulativeCounters, long target) {
+        CounterTuple dummyCounter = new CounterTuple(null, target);
+        int index = Arrays.binarySearch(
+                cumulativeCounters,
+                dummyCounter,
+                (o1, o2) -> {
+                    long diff = o1.count - o2.count;
+                    // Return -1/0/1 to avoid unsafe long conversions to int
+                    if (diff > 0) {
+                        return 1;
+                    } else if (diff < 0) {
+                        return -1;
+                    }
+                    return 0;
+                }
+        );
+        if (index < 0) {
+            index = 0;
+        } else if (index > cumulativeCounters.length - 1) {
+            index = cumulativeCounters.length - 1;
+        }
+        return cumulativeCounters[index].key;
     }
 
     @Override

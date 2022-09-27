@@ -81,6 +81,7 @@ import io.trino.operator.aggregation.TDigestAggregationFunction;
 import io.trino.operator.aggregation.VarcharApproximateMostFrequent;
 import io.trino.operator.aggregation.VarianceAggregation;
 import io.trino.operator.aggregation.arrayagg.ArrayAggregationFunction;
+import io.trino.operator.aggregation.histogram.ExactPercentile;
 import io.trino.operator.aggregation.histogram.Histogram;
 import io.trino.operator.aggregation.listagg.ListaggAggregationFunction;
 import io.trino.operator.aggregation.minmaxbyn.MaxByNAggregationFunction;
@@ -545,6 +546,7 @@ public final class SystemFunctionBundle
                 .functions(DECIMAL_TO_SMALLINT_SATURATED_FLOOR_CAST, SMALLINT_TO_DECIMAL_SATURATED_FLOOR_CAST)
                 .functions(DECIMAL_TO_TINYINT_SATURATED_FLOOR_CAST, TINYINT_TO_DECIMAL_SATURATED_FLOOR_CAST)
                 .aggregates(Histogram.class)
+                .aggregates(ExactPercentile.class)
                 .aggregates(ChecksumAggregationFunction.class)
                 .aggregates(ArbitraryAggregationFunction.class)
                 .functions(GREATEST, LEAST)

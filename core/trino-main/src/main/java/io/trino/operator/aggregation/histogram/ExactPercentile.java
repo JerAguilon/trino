@@ -29,7 +29,7 @@ import io.trino.spi.type.Type;
 
 import static java.util.Objects.requireNonNull;
 
-@AggregationFunction("ExactPercentile")
+@AggregationFunction("exact_percentile")
 @Description("Get the exact percentile. Input T must be sortable")
 public final class ExactPercentile
 {
@@ -64,10 +64,10 @@ public final class ExactPercentile
         state.addMemoryUsage(typedHistogram.getEstimatedSize() - startSize);
     }
 
-    @OutputFunction("double")
+    @OutputFunction("T")
     public static void output(@TypeParameter("T") Type type, @AggregationState("T") HistogramState state, BlockBuilder out)
     {
         TypedHistogram typedHistogram = state.get();
-        typedHistogram.serialize(out);
+        typedHistogram.serializeMedian(out);
     }
 }

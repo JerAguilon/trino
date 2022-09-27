@@ -21,6 +21,7 @@ import io.trino.spi.block.BlockBuilder;
 import io.trino.spi.type.Type;
 import io.trino.type.BlockTypeOperators.BlockPositionEqual;
 import io.trino.type.BlockTypeOperators.BlockPositionHashCode;
+import jdk.jshell.spi.ExecutionControl;
 import org.openjdk.jol.info.ClassLayout;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -181,6 +182,11 @@ public class GroupedTypedHistogram
 
             out.closeEntry();
         }
+    }
+
+    @Override
+    public void serializeMedian(BlockBuilder out) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
